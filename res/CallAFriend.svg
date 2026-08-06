@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 101.6 128.5" width="101.6mm" height="128.5mm">
+  <defs>
+    <linearGradient id="panelGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#242830" />
+      <stop offset="50%" stop-color="#191c22" />
+      <stop offset="100%" stop-color="#121418" />
+    </linearGradient>
+    <linearGradient id="headerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00d2ff" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#3a7bd5" stop-opacity="0.8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Base Panel Background -->
+  <rect width="101.6" height="128.5" fill="url(#panelGrad)" />
+  <rect x="1" y="1" width="99.6" height="126.5" rx="1.5" fill="none" stroke="#2e3440" stroke-width="0.4" />
+
+  <!-- Top Accent Stripe -->
+  <rect x="0" y="0" width="101.6" height="2.2" fill="url(#headerGrad)" />
+
+  <!-- Title -->
+  <text x="50.8" y="9.5" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-size="4.2" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="1.2">CALL A FRIEND</text>
+  <text x="50.8" y="13.0" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-size="1.9" font-weight="600" fill="#00d2ff" text-anchor="middle" letter-spacing="0.8">RHYTHM GENERATOR</text>
+
+  <!-- Top Button Section Line & Labels -->
+  <line x1="8" y1="23.5" x2="93.6" y2="23.5" stroke="#2e3440" stroke-width="0.3" />
+
+  <!-- Button Labels (Buttons at x=18, 38, 58, 78; y=18.5) -->
+  <text x="18" y="22.5" font-family="sans-serif" font-size="1.8" font-weight="bold" fill="#a8b5c2" text-anchor="middle">CLEAR</text>
+  <text x="38" y="22.5" font-family="sans-serif" font-size="1.8" font-weight="bold" fill="#a8b5c2" text-anchor="middle">RECALL</text>
+  <text x="58" y="22.5" font-family="sans-serif" font-size="1.8" font-weight="bold" fill="#a8b5c2" text-anchor="middle">SAVE</text>
+  <text x="78" y="22.5" font-family="sans-serif" font-size="1.8" font-weight="bold" fill="#a8b5c2" text-anchor="middle">REST</text>
+
+  <!-- Middle Section Keypad Bezel Frame (centered at 50.8, y: 25.0 to 70.0) -->
+  <rect x="29.5" y="25.0" width="42.6" height="45.0" rx="2.5" fill="#13161b" stroke="#2e3440" stroke-width="0.5" />
+
+  <!-- Below Keypad Section Line & Knob Labels (Knobs at y=78.0; x=15.0, 32.9, 50.8, 68.7, 86.6) -->
+  <line x1="8" y1="71.5" x2="93.6" y2="71.5" stroke="#2e3440" stroke-width="0.3" />
+  <text x="15.0" y="85.5" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#a8b5c2" text-anchor="middle">SYMMETRY</text>
+  <text x="32.9" y="85.5" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#a8b5c2" text-anchor="middle">DENSITY</text>
+  <text x="50.8" y="85.5" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#a8b5c2" text-anchor="middle">GATE LEN</text>
+  <text x="68.7" y="85.5" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#a8b5c2" text-anchor="middle">TRIPLET</text>
+  <text x="86.6" y="85.5" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#a8b5c2" text-anchor="middle">ATTEN</text>
+
+  <!-- Bottom Left Section: 7-Segment Display Bezel -->
+  <rect x="8.5" y="93.0" width="28.0" height="18.0" rx="1.5" fill="#0c0e12" stroke="#2e3440" stroke-width="0.5" />
+  <text x="22.5" y="114.5" font-family="sans-serif" font-size="1.6" font-weight="bold" fill="#6d7a88" text-anchor="middle">STATUS</text>
+
+  <!-- Bottom Right Section: 3x3 Jack Grid Bezel & Labels -->
+  <rect x="42.5" y="89.5" width="51.0" height="34.0" rx="1.5" fill="#14171d" stroke="#2e3440" stroke-width="0.5" />
+
+  <!-- Row 1 Labels (y=92.5 port centered at y=95.5) -->
+  <text x="49.5" y="92.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#00d2ff" text-anchor="middle">CLK IN</text>
+  <text x="68.0" y="92.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#00d2ff" text-anchor="middle">RST IN</text>
+  <text x="86.5" y="92.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#ffb300" text-anchor="middle">PHRASE</text>
+
+  <!-- Row 2 Labels (port centered at y=106.5) -->
+  <text x="49.5" y="103.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#ffb300" text-anchor="middle">BAR</text>
+  <text x="68.0" y="103.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#ffb300" text-anchor="middle">GROUP</text>
+  <text x="86.5" y="103.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#ffb300" text-anchor="middle">ACCENT</text>
+
+  <!-- Row 3 Labels (port centered at y=117.5) -->
+  <text x="49.5" y="114.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#00e5ff" text-anchor="middle">GATE</text>
+  <text x="68.0" y="114.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#4caf50" text-anchor="middle">UNI CV</text>
+  <text x="86.5" y="114.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#e91e63" text-anchor="middle">BIP CV</text>
+</svg>

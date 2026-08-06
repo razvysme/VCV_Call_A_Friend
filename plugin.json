@@ -1,0 +1,35 @@
+{
+  "slug": "CallAFriend",
+  "name": "CallAFriend",
+  "version": "2.0.0",
+  "license": "proprietary",
+  "brand": "CallAFriend",
+  "author": "Razvan Paisa",
+  "authorEmail": "",
+  "authorUrl": "",
+  "pluginUrl": "",
+  "manualUrl": "",
+  "sourceUrl": "",
+  "donateUrl": "",
+  "changelogUrl": "",
+  "modules": [
+    {
+      "slug": "ClockGenerator",
+      "name": "ClockGenerator",
+      "description": "Clock Generator Blank Module",
+      "tags": [
+        "Clock"
+      ]
+    },
+    {
+      "slug": "CallAFriend",
+      "name": "Call a Friend",
+      "description": "Eurorack Rhythm Generator with Rotary Phone Dial and Wobbler Sync",
+      "tags": [
+        "Sequencer",
+        "Clock generator",
+        "Controller"
+      ]
+    }
+  ]
+}

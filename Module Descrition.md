@@ -11,7 +11,7 @@ A modular synthesizer hardware sequencer and anti-aliased audio generator. The m
 2. **Bar Start Out:** $10\text{ms}$ pulse fired every 4 clock pulses ($4/4$ downbeat grid metric).
 3. **Group Start Out:** $10\text{ms}$ pulse fired on Step 0 of _any_ active `RhythmicGroup`.
 4. **Accent Out:** $10\text{ms}$ pulse fired on internal steps based on the **Symmetry/Accent Hierarchy Engine**.
-5. **Gate Out ($0\text{V}$ to $+10\text{V}$ Velocity-Gating):** Dynamic voltage gate output whose peak amplitude represents note velocity ($0\text{V}$ to $+5\text{V}$ baseline, scaled up to $+10\text{V}$ max on accents). Governed by the **Global Gate Length Knob** and **Note Density** threshold. Drops to $0\text{V}$ on rests or when filtered by Note Density.
+5. **Gate Out ($0\text{V}$ to $+10\text{V}$ Velocity-Gating):** Dynamic voltage gate output whose peak amplitude represents note velocity ($0\text{V}$ to $+5\text{V}$ baseline, scaled up to $+10\text{V}$ max on accents, attenuated to $\sim 0.5\text{V}-1.5\text{V}$ on ghost notes). Governed by the **Global Gate Length Knob** and **Note Density** threshold. Drops to $0\text{V}$ on rests.
 6. **Unipolar CV Out ($0\text{V}$ to $+10\text{V}$):** Sample-and-hold linear unquantized pitch voltage. Updates only when a note triggers (holds its previous pitch when steps are silenced by Note Density). Attenuated directly toward $0\text{V}$ via the Pitch Attenuator knob.
 7. **Bipolar CV Out ($-5\text{V}$ to $+5\text{V}$):** Zero-centered sample-and-hold pitch voltage. Updates only when a note triggers (holds its previous pitch when steps are silenced by Note Density). Attenuated symmetrically toward $0\text{V}$ via the Pitch Attenuator knob.
 ## H I D
@@ -29,6 +29,9 @@ Reads $0-100\%$. Sampled **only** at the precise trailing edge of a phone dial p
 
 **Note Density Knob**
 Reads $0-100\%$ ($0 = \text{no notes}$, $100 = \text{all notes}$). Acts as a real-time velocity threshold across the sequence. Each step generates an inner velocity ($0\text{V}-5\text{V}$); if a step's velocity meets or exceeds the threshold set by the knob, the note is active and triggers the Gate output at its velocity level.
+
+**Rest Bias Knob (Prototyping Phase)**
+Reads $0-100\%$. Controls the chained probability of rests. When a step is of type rest, the next step has a higher chance to also be evaluated as a rest, biasing the likelihood of extended rests from $0\%$ (independent steps) to $100\%$ (strongly clustered pauses).
 
 **Global Gate Length**
 Real-time continuous sweep. Modulates the duty cycle ($5\%$ to $95\%$) of the active Gate output pin.
@@ -124,11 +127,26 @@ Unlike traditional sequencers with fixed $+5\text{V}$ binary gate outputs, **Cal
 
 > **Note:** The **Note Density** knob acts as a dynamic threshold comparator:
 > $$\text{Threshold} = 5.0\text{V} \times \left(1 - \frac{\text{Density}}{100}\right)$$
-> When a step's inner velocity is greater than or equal to this threshold, the note plays. At $100\%$, the threshold is $0\text{V}$ (all notes play); at $0\%$, the threshold is $5\text{V}$ (no notes play).
+> When a step's inner velocity is greater than or equal to this threshold, the note plays as a standard or accented note.
 
-When a note is active, its velocity directly drives the amplitude of **Gate Out**:
-- **Standard Notes**: Output gate voltage equals the step's inner velocity ($0\text{V}$ to $+5\text{V}$).
-- **Accented Notes**: Applied with a $1.1\times$ multiplier ($V_{\text{gate}} = V_{\text{inner}} \times 1.1$), adding dynamic punch up to $+5.5\text{V}$ (clamped to $+10\text{V}$ max).
+### Ghost Notes (Option A: Soft-Knee Threshold Window)
+To provide organic dynamics where notes softly fade before disappearing into complete rests, a **Soft-Knee Ghost Window** ($\Delta V = 1.0\text{V}$) is applied immediately below the current Note Density threshold:
+- **Standard Notes** ($V_{\text{inner}} \ge \text{Threshold}$): Output gate voltage equals the step's inner velocity ($0\text{V}$ to $+5\text{V}$), with normal gate duty cycle ($5\% - 95\%$).
+- **Accented Notes** ($V_{\text{inner}} \ge \text{Threshold}$ AND step is accented): Applied with a $1.1\times$ multiplier ($V_{\text{gate}} = V_{\text{inner}} \times 1.1$, clamped to $+10\text{V}$ max) and triggers the **Accent Out** $10\text{ms}$ pulse.
+- **Ghost Notes** ($\text{Threshold} - 1.0\text{V} \le V_{\text{inner}} < \text{Threshold}$): Plays as an attenuated, snappy ghost note:
+  - Gate amplitude is scaled down to $30\%$ of inner velocity ($V_{\text{gate}} = V_{\text{inner}} \times 0.3$, producing $\sim 0.3\text{V}-1.5\text{V}$).
+  - Gate length is shortened to $50\%$ of the current Global Gate Length for crisp articulation.
+  - **Accent Out** remains silent ($0\text{V}$).
+- **Rests** ($V_{\text{inner}} < \text{Threshold} - 1.0\text{V}$ or explicit `TYPE_REST`): $V_{\text{gate}} = 0\text{V}$.
+
+<!-- 
+COMMENT / DESIGN ALTERNATIVE FOR PROTOTYPING:
+Option B: Structural / Subdivision Ghost Note Placement
+Instead of (or in combination with) threshold soft-knee, ghost notes could be intentionally placed based on musical position:
+1. High Symmetry: Ghost notes are deterministically placed on weak off-beat subdivisions / pickup steps preceding an accent or group boundary.
+2. Low Symmetry: The Turing Machine shift register evaluates a secondary bit condition to introduce evolving, syncopated ghost notes.
+(Kept as an alternative prototype consideration to compare against Option A for musical meaningfulness).
+-->
 
 ## 7. Tuplet Poly-metering & Parallel Lanes
 
@@ -139,3 +157,31 @@ To achieve polyrhythmic and polymetric structures without external clock divider
 > **Note:** To prevent drift over long performances, the Triplet Lane executes an automatic phase-lock alignment against the Straight Lane every 2 straight clock cycles ($2\text{ beats} = 3\text{ triplet steps}$).
 
 The **Triplet / Straight** knob continuously crossfades CV, Gate, and Trigger outputs between the two parallel lanes, allowing seamless morphing from pure triplet feels ($0\%$) to straight metric grids ($100\%$) or hybrid poly-metric blends.
+
+## 8. Rest Bias & Chained Rest Probabilities (Prototyping Phase)
+
+To facilitate natural phrasing and encourage longer, more musical pauses, step generation incorporates a Markov/chained rest bias mechanism:
+- When any step is evaluated as a **rest** (either as an explicit `TYPE_REST` step or filtered out via the **Note Density** threshold), the subsequent step is biased toward remaining a rest.
+- The **Rest Bias Knob** ($0-100\%$) scales this extra rest probability:
+  - At **$0\%$ Bias**: Step rest evaluations remain completely independent.
+  - At **$100\%$ Bias**: Following a rest, the next step has a maximum probability of continuing as a rest, creating extended contiguous silent blocks.
+
+## 9. Future Suggestion: Preset / Group Chaining (Song Form & A/B Section Structures)
+
+To elevate **Call a Friend** from a single-phrase loop generator into an expressive live song-form sequencer, a rapid **Preset & Group Chaining** mechanism is proposed:
+
+### Concept Overview
+Allow the user to quickly link saved preset slots (or distinct rhythmic sections) into macro song arrangements (e.g., standard verse/chorus or AABA structures):
+* **Section A (e.g., Slot 1):** Additive groove like $4 + 2 + 2 + 4 + 2$ (14 steps)
+* **Section B (e.g., Slot 2):** Contrasting fill or turnaround like $3 + 3$ (6 steps)
+* **Chained Macro-Phrase:** Sequenced as **$\text{A} \rightarrow \text{A} \rightarrow \text{B} \rightarrow \text{A}$** before looping.
+
+### Proposed Hardware Interaction Workflow
+1. **Chain Input Mode:**
+   - Double-tap or hold **`[ RECALL ]`** (e.g., display flashes `C-` for Chain Mode).
+   - Dial a sequence of preset slot digits in order (e.g., dialing `1`, then `1`, then `2`, then `1`).
+   - Press **`[ RECALL ]`** or allow timeout to confirm.
+2. **Execution & Transition Logic:**
+   - Playback transitions seamlessly from one slot to the next upon completion of each section's phrase (on the phrase boundary / downbeat).
+   - The 2-digit display dynamically reflects the active playback block (e.g., `A1` $\rightarrow$ `A2` $\rightarrow$ `b1` $\rightarrow$ `A1`).
+   - **Phrase Start Out** can fire on every individual section reset or at the complete macro-chain loop origin.

@@ -6,12 +6,13 @@ A modular synthesizer hardware sequencer and anti-aliased audio generator. The m
 ### Input
 1. **Clock In:** Hardware Interrupt (`RISING`). Drives step progression.
 2. **Reset In:** Hardware Interrupt (`RISING`).  Jumps to Group 0, Step 0. 
+3. **Gate Length CV In ($0\text{V}$ to $+10\text{V}$):** Real-time CV modulation of the gate duty cycle, summed with the **Global Gate Length** knob.
 ### Output 
 1. **Phrase Start Out:** $10\text{ms}$ pulse fired exactly at Group 0, Step 0.
 2. **Bar Start Out:** $10\text{ms}$ pulse fired every 4 clock pulses ($4/4$ downbeat grid metric).
 3. **Group Start Out:** $10\text{ms}$ pulse fired on Step 0 of _any_ active `RhythmicGroup`.
 4. **Accent Out:** $10\text{ms}$ pulse fired on internal steps based on the **Symmetry/Accent Hierarchy Engine**.
-5. **Gate Out ($0\text{V}$ to $+10\text{V}$ Velocity-Gating):** Dynamic voltage gate output whose peak amplitude represents note velocity ($0\text{V}$ to $+5\text{V}$ baseline, scaled up to $+10\text{V}$ max on accents, attenuated to $\sim 0.5\text{V}-1.5\text{V}$ on ghost notes). Governed by the **Global Gate Length Knob** and **Note Density** threshold. Drops to $0\text{V}$ on rests.
+5. **Gate Out ($0\text{V}$ to $+10\text{V}$ Velocity-Gating):** Dynamic voltage gate output whose peak amplitude represents note velocity ($0\text{V}$ to $+5\text{V}$ baseline, scaled up to $+10\text{V}$ max on accents, attenuated to $\sim 0.5\text{V}-1.5\text{V}$ on ghost notes). Governed by the **Global Gate Length Knob**, **Gate Length CV In**, and **Note Density** threshold. Drops to $0\text{V}$ on rests.
 6. **Unipolar CV Out ($0\text{V}$ to $+10\text{V}$):** Sample-and-hold linear unquantized pitch voltage. Updates only when a note triggers (holds its previous pitch when steps are silenced by Note Density). Attenuated directly toward $0\text{V}$ via the Pitch Attenuator knob.
 7. **Bipolar CV Out ($-5\text{V}$ to $+5\text{V}$):** Zero-centered sample-and-hold pitch voltage. Updates only when a note triggers (holds its previous pitch when steps are silenced by Note Density). Attenuated symmetrically toward $0\text{V}$ via the Pitch Attenuator knob.
 ## H I D
@@ -33,11 +34,8 @@ Reads $0-100\%$ ($0 = \text{no notes}$, $100 = \text{all notes}$). Acts as a rea
 **Rest Bias Knob (Prototyping Phase)**
 Reads $0-100\%$. Controls the chained probability of rests. When a step is of type rest, the next step has a higher chance to also be evaluated as a rest, biasing the likelihood of extended rests from $0\%$ (independent steps) to $100\%$ (strongly clustered pauses).
 
-**Global Gate Length**
-Real-time continuous sweep. Modulates the duty cycle ($5\%$ to $95\%$) of the active Gate output pin.
-
-**Triplet / Straight Knob**
-Reads $0-100\%$ ($0 = \text{only triplets}$, $100 = \text{only straight}$). Controls the poly-metering crossfade between the parallel Straight and Triplet generation lanes.
+**Global Gate Length Knob**
+Real-time continuous sweep ($5\%$ to $95\%$), modulatable via the **Gate Length CV In** jack. Modulates the duty cycle of the active Gate output pin.
 
 **Pitch Attenuator**
 Dual-axis hardware attenuation. Scales analog output voltages post-DAC. _Does not hit the microprocessor._
@@ -148,17 +146,7 @@ Instead of (or in combination with) threshold soft-knee, ghost notes could be in
 (Kept as an alternative prototype consideration to compare against Option A for musical meaningfulness).
 -->
 
-## 7. Tuplet Poly-metering & Parallel Lanes
-
-To achieve polyrhythmic and polymetric structures without external clock dividers, **Call a Friend** runs two parallel generation playheads simultaneously over the stored sequence array:
-1. **Straight Lane**: Clocked directly at the incoming $1/1$ step rate.
-2. **Triplet Lane**: Clocked at a $3:2$ tuplet subdivision rate ($\text{Period}_{\text{triplet}} = \text{Period}_{\text{straight}} \times \frac{2}{3}$).
-
-> **Note:** To prevent drift over long performances, the Triplet Lane executes an automatic phase-lock alignment against the Straight Lane every 2 straight clock cycles ($2\text{ beats} = 3\text{ triplet steps}$).
-
-The **Triplet / Straight** knob continuously crossfades CV, Gate, and Trigger outputs between the two parallel lanes, allowing seamless morphing from pure triplet feels ($0\%$) to straight metric grids ($100\%$) or hybrid poly-metric blends.
-
-## 8. Rest Bias & Chained Rest Probabilities (Prototyping Phase)
+## 7. Rest Bias & Chained Rest Probabilities (Prototyping Phase)
 
 To facilitate natural phrasing and encourage longer, more musical pauses, step generation incorporates a Markov/chained rest bias mechanism:
 - When any step is evaluated as a **rest** (either as an explicit `TYPE_REST` step or filtered out via the **Note Density** threshold), the subsequent step is biased toward remaining a rest.
@@ -166,7 +154,7 @@ To facilitate natural phrasing and encourage longer, more musical pauses, step g
   - At **$0\%$ Bias**: Step rest evaluations remain completely independent.
   - At **$100\%$ Bias**: Following a rest, the next step has a maximum probability of continuing as a rest, creating extended contiguous silent blocks.
 
-## 9. Future Suggestion: Preset / Group Chaining (Song Form & A/B Section Structures)
+## 8. Future Suggestion: Preset / Group Chaining (Song Form & A/B Section Structures)
 
 To elevate **Call a Friend** from a single-phrase loop generator into an expressive live song-form sequencer, a rapid **Preset & Group Chaining** mechanism is proposed:
 

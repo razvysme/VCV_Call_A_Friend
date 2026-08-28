@@ -23,7 +23,6 @@ struct CallAFriend : Module {
 		SYMMETRY_PARAM,
 		NOTE_DENSITY_PARAM,
 		GATE_LENGTH_PARAM,
-		TRIPLET_STRAIGHT_PARAM,
 		PITCH_ATTEN_PARAM,
 		CLEAR_PARAM,
 		RECALL_PARAM,
@@ -44,6 +43,7 @@ struct CallAFriend : Module {
 	enum InputId {
 		CLOCK_INPUT,
 		RESET_INPUT,
+		GATE_LENGTH_INPUT,
 		INPUTS_LEN
 	};
 	enum OutputId {
@@ -93,10 +93,7 @@ struct CallAFriend : Module {
 		}
 	};
 
-	PlayheadState straightLane;
-	PlayheadState tripletLane;
-	float tripletSampleCounter = 0.f;
-	int tripletStepIndex = 0;
+	PlayheadState playhead;
 
 	// Mode State
 	enum InputMode {
@@ -136,7 +133,6 @@ struct CallAFriend : Module {
 		configParam(SYMMETRY_PARAM, 0.f, 100.f, 50.f, "Symmetry", "%");
 		configParam(NOTE_DENSITY_PARAM, 0.f, 100.f, 100.f, "Note Density", "%");
 		configParam(GATE_LENGTH_PARAM, 5.f, 95.f, 50.f, "Global Gate Length", "%");
-		configParam(TRIPLET_STRAIGHT_PARAM, 0.f, 100.f, 100.f, "Triplet / Straight", "%");
 		configParam(PITCH_ATTEN_PARAM, 0.f, 1.f, 1.f, "Pitch Attenuator", "%", 0.f, 100.f);
 
 		configParam(CLEAR_PARAM, 0.f, 1.f, 0.f, "Clear");
@@ -150,6 +146,7 @@ struct CallAFriend : Module {
 
 		configInput(CLOCK_INPUT, "Clock");
 		configInput(RESET_INPUT, "Reset");
+		configInput(GATE_LENGTH_INPUT, "Gate Length CV");
 
 		configOutput(PHRASE_START_OUTPUT, "Phrase Start");
 		configOutput(BAR_START_OUTPUT, "Bar Start");
@@ -299,89 +296,95 @@ struct CallAFriend : Module {
 		synctime[syncindex] = Delta;
 	}
 
-	void advanceLaneStep(PlayheadState& lane, float sampleTime, float periodSec) {
+	void advanceStep(float sampleTime, float periodSec) {
 		if (groups.empty()) return;
 
-		lane.currentStepInGroup++;
-		if (lane.currentStepInGroup >= groups[lane.currentGroupIdx].length) {
-			lane.currentStepInGroup = 0;
-			lane.currentGroupIdx = (lane.currentGroupIdx + 1) % groups.size();
+		playhead.currentStepInGroup++;
+		if (playhead.currentStepInGroup >= groups[playhead.currentGroupIdx].length) {
+			playhead.currentStepInGroup = 0;
+			playhead.currentGroupIdx = (playhead.currentGroupIdx + 1) % groups.size();
 		}
 
-		lane.totalStepCounter++;
-		lane.barClockCounter++;
+		playhead.totalStepCounter++;
+		playhead.barClockCounter++;
 
 		// 1. Phrase Start Out: fired at Group 0, Step 0
-		if (lane.currentGroupIdx == 0 && lane.currentStepInGroup == 0) {
-			lane.phrasePulse.trigger(0.010f);
+		if (playhead.currentGroupIdx == 0 && playhead.currentStepInGroup == 0) {
+			playhead.phrasePulse.trigger(0.010f);
 		}
 
 		// 2. Bar Start Out: fired every 4 clock pulses
-		if (lane.barClockCounter % 4 == 1 || lane.barClockCounter == 1) {
-			lane.barPulse.trigger(0.010f);
+		if (playhead.barClockCounter % 4 == 1 || playhead.barClockCounter == 1) {
+			playhead.barPulse.trigger(0.010f);
 		}
 
 		// 3. Group Start Out: fired on Step 0 of any active RhythmicGroup
-		if (lane.currentStepInGroup == 0) {
-			lane.groupPulse.trigger(0.010f);
+		if (playhead.currentStepInGroup == 0) {
+			playhead.groupPulse.trigger(0.010f);
 		}
 
 		// 4. Accent & Drift Out: Symmetry/Accent Hierarchy Engine & Turing Machine Mutation
-		lane.isAccent = false;
-		RhythmicGroup& curGroup = groups[lane.currentGroupIdx];
+		playhead.isAccent = false;
+		RhythmicGroup& curGroup = groups[playhead.currentGroupIdx];
 		float sym = params[SYMMETRY_PARAM].getValue();
 		int randVal = std::rand() % 100;
 		if (randVal < (int)sym) {
-			lane.isAccent = getTemplateAccents(curGroup.length, lane.currentStepInGroup);
+			playhead.isAccent = getTemplateAccents(curGroup.length, playhead.currentStepInGroup);
 		} else {
-			lane.isAccent = (turingRegister & 1) != 0;
+			playhead.isAccent = (turingRegister & 1) != 0;
 			// Advance Turing Machine
 			bool newBit = ((turingRegister & 1) ^ ((turingRegister >> 1) & 1));
 			turingRegister = (turingRegister >> 1) | (newBit ? 0x8000 : 0);
 
 			// Organic Drifting: mutate pitch CV slightly when symmetry < 100%
-			if (lane.currentStepInGroup < (int)curGroup.stepCVs.size()) {
+			if (playhead.currentStepInGroup < (int)curGroup.stepCVs.size()) {
 				int driftSemitones = ((turingRegister & 0x7) - 3); // -3..+4 semitones drift
-				float newCV = curGroup.stepCVs[lane.currentStepInGroup] + driftSemitones / 12.0f;
+				float newCV = curGroup.stepCVs[playhead.currentStepInGroup] + driftSemitones / 12.0f;
 				if (newCV < 0.f) newCV += 1.0f;
 				if (newCV > 2.0f) newCV -= 1.0f;
-				curGroup.stepCVs[lane.currentStepInGroup] = newCV;
+				curGroup.stepCVs[playhead.currentStepInGroup] = newCV;
 			}
 		}
 
 		// 5. Note Density threshold check & Velocity Gate
-		lane.isNoteActive = false;
+		playhead.isNoteActive = false;
 		float stepVel = 0.f;
-		if (!curGroup.isRest && lane.currentStepInGroup < (int)curGroup.stepVelocities.size()) {
-			stepVel = curGroup.stepVelocities[lane.currentStepInGroup];
+		if (!curGroup.isRest && playhead.currentStepInGroup < (int)curGroup.stepVelocities.size()) {
+			stepVel = curGroup.stepVelocities[playhead.currentStepInGroup];
 			float density = params[NOTE_DENSITY_PARAM].getValue();
 			if (density > 0.f) {
 				if (density >= 100.f) {
-					lane.isNoteActive = true;
+					playhead.isNoteActive = true;
 				} else {
 					float threshold = 5.0f * (1.0f - density / 100.f);
-					lane.isNoteActive = (stepVel >= threshold);
+					playhead.isNoteActive = (stepVel >= threshold);
 				}
 			}
 		}
 
-		if (lane.isNoteActive) {
-			float duty = params[GATE_LENGTH_PARAM].getValue() / 100.f;
-			lane.gateTimeRemaining = periodSec * duty;
-			float mult = lane.isAccent ? 1.1f : 1.0f;
-			lane.currentGateVoltage = stepVel * mult;
-			if (lane.currentGateVoltage > 10.f) lane.currentGateVoltage = 10.f;
+		if (playhead.isNoteActive) {
+			float gateLenPercent = params[GATE_LENGTH_PARAM].getValue();
+			if (inputs[GATE_LENGTH_INPUT].isConnected()) {
+				// Modulate gate length by CV (0-10V sweeps 0-100%, summed with knob)
+				gateLenPercent += inputs[GATE_LENGTH_INPUT].getVoltage() * 10.0f;
+			}
+			gateLenPercent = clamp(gateLenPercent, 5.0f, 95.0f);
+			float duty = gateLenPercent / 100.f;
+			playhead.gateTimeRemaining = periodSec * duty;
 
-			if (lane.currentStepInGroup < (int)curGroup.stepCVs.size()) {
-				lane.currentCV = curGroup.stepCVs[lane.currentStepInGroup];
+			float mult = playhead.isAccent ? 1.1f : 1.0f;
+			playhead.currentGateVoltage = std::min(stepVel * mult, 10.f);
+
+			if (playhead.currentStepInGroup < (int)curGroup.stepCVs.size()) {
+				playhead.currentCV = curGroup.stepCVs[playhead.currentStepInGroup];
 			}
 		} else {
-			lane.gateTimeRemaining = 0.f;
-			lane.currentGateVoltage = 0.f;
+			playhead.gateTimeRemaining = 0.f;
+			playhead.currentGateVoltage = 0.f;
 		}
 
-		if (lane.isAccent && lane.isNoteActive) {
-			lane.accentPulse.trigger(0.010f);
+		if (playhead.isAccent && playhead.isNoteActive) {
+			playhead.accentPulse.trigger(0.010f);
 		}
 	}
 
@@ -397,10 +400,7 @@ struct CallAFriend : Module {
 			} else {
 				// Instantly flushes array, zeros variables, resets display to 00
 				groups.clear();
-				straightLane.reset();
-				tripletLane.reset();
-				tripletSampleCounter = 0.f;
-				tripletStepIndex = 0;
+				playhead.reset();
 				mode = MODE_NORMAL;
 				updateDisplay();
 			}
@@ -425,14 +425,9 @@ struct CallAFriend : Module {
 
 		// Check Reset Input
 		if (resetTrigger.process(inputs[RESET_INPUT].getVoltage())) {
-			straightLane.reset();
-			tripletLane.reset();
-			tripletSampleCounter = 0.f;
-			tripletStepIndex = 0;
-			straightLane.phrasePulse.trigger(0.010f);
-			straightLane.groupPulse.trigger(0.010f);
-			tripletLane.phrasePulse.trigger(0.010f);
-			tripletLane.groupPulse.trigger(0.010f);
+			playhead.reset();
+			playhead.phrasePulse.trigger(0.010f);
+			playhead.groupPulse.trigger(0.010f);
 		}
 
 		// Check Clock Input
@@ -443,16 +438,8 @@ struct CallAFriend : Module {
 			// Clock Shutter Mechanism: force absolute phase reset on audio wave loop
 			phaseAccumulator = 0;
 
-			float straightPeriodSec = (extsync && SyncedPeriodTime > 0) ? ((float)SyncedPeriodTime * args.sampleTime) : 0.25f;
-			advanceLaneStep(straightLane, args.sampleTime, straightPeriodSec);
-
-			// Align & advance triplet lane every 2 straight clock steps
-			if (straightLane.totalStepCounter % 2 == 0) {
-				float tripletPeriodSec = straightPeriodSec * (2.0f / 3.0f);
-				advanceLaneStep(tripletLane, args.sampleTime, tripletPeriodSec);
-				tripletSampleCounter = 0.f;
-				tripletStepIndex = 0;
-			}
+			float periodSec = (extsync && SyncedPeriodTime > 0) ? ((float)SyncedPeriodTime * args.sampleTime) : 0.25f;
+			advanceStep(args.sampleTime, periodSec);
 		}
 
 		// Timeout check for extsync
@@ -461,41 +448,17 @@ struct CallAFriend : Module {
 			extsync = false;
 		}
 
-		// Advance sub-steps for Triplet lane
-		float straightPeriodSamples = (extsync && SyncedPeriodTime > 0) ? (float)SyncedPeriodTime : (args.sampleRate * 0.25f);
-		float tripletStepSamples = straightPeriodSamples * (2.0f / 3.0f);
-		float tripletPeriodSec = tripletStepSamples * args.sampleTime;
-
-		tripletSampleCounter += 1.0f;
-		if (tripletStepIndex == 0 && tripletSampleCounter >= tripletStepSamples) {
-			advanceLaneStep(tripletLane, args.sampleTime, tripletPeriodSec);
-			tripletStepIndex = 1;
-		} else if (tripletStepIndex == 1 && tripletSampleCounter >= 2.0f * tripletStepSamples) {
-			advanceLaneStep(tripletLane, args.sampleTime, tripletPeriodSec);
-			tripletStepIndex = 2;
-		}
-
 		// Update gate durations
-		if (straightLane.gateTimeRemaining > 0.f) {
-			straightLane.gateTimeRemaining -= args.sampleTime;
+		if (playhead.gateTimeRemaining > 0.f) {
+			playhead.gateTimeRemaining -= args.sampleTime;
 		} else {
-			straightLane.currentGateVoltage = 0.f;
+			playhead.currentGateVoltage = 0.f;
 		}
-
-		if (tripletLane.gateTimeRemaining > 0.f) {
-			tripletLane.gateTimeRemaining -= args.sampleTime;
-		} else {
-			tripletLane.currentGateVoltage = 0.f;
-		}
-
-		float straightCV = straightLane.currentCV;
-		float tripletCV = tripletLane.currentCV;
 
 		// Determine if we are in Generator Mode (< 50ms period / > 20 Hz clock)
 		bool generatorMode = (extsync && SyncedPeriodTime < (args.sampleRate * 0.05f));
 
 		float atten = params[PITCH_ATTEN_PARAM].getValue();
-		float mix = params[TRIPLET_STRAIGHT_PARAM].getValue() / 100.f; // 0 = triplet, 1 = straight
 
 		if (generatorMode) {
 			// GENERATOR MODE: Audio-rate wavetable synthesis from stored stepCVs
@@ -522,36 +485,20 @@ struct CallAFriend : Module {
 			outputs[BIPOLAR_CV_OUTPUT].setVoltage((interpVal - 1.f) * 5.f * atten);
 			outputs[GATE_OUTPUT].setVoltage(5.f);
 		} else {
-			// SEQUENCER MODE: Poly-metering crossfade between straight and triplet lanes
-			float unipolarStraight = straightCV * 5.f * atten;
-			float bipolarStraight = (straightCV - 1.f) * 5.f * atten;
+			// SEQUENCER MODE
+			float unipolar = playhead.currentCV * 5.f * atten;
+			float bipolar = (playhead.currentCV - 1.f) * 5.f * atten;
 
-			float unipolarTriplet = tripletCV * 5.f * atten;
-			float bipolarTriplet = (tripletCV - 1.f) * 5.f * atten;
-
-			float mixedUnipolar = unipolarTriplet * (1.f - mix) + unipolarStraight * mix;
-			float mixedBipolar = bipolarTriplet * (1.f - mix) + bipolarStraight * mix;
-			float mixedGate = tripletLane.currentGateVoltage * (1.f - mix) + straightLane.currentGateVoltage * mix;
-
-			outputs[UNIPOLAR_CV_OUTPUT].setVoltage(mixedUnipolar);
-			outputs[BIPOLAR_CV_OUTPUT].setVoltage(mixedBipolar);
-			outputs[GATE_OUTPUT].setVoltage(mixedGate);
+			outputs[UNIPOLAR_CV_OUTPUT].setVoltage(unipolar);
+			outputs[BIPOLAR_CV_OUTPUT].setVoltage(bipolar);
+			outputs[GATE_OUTPUT].setVoltage(playhead.currentGateVoltage);
 		}
 
-		// Process Trigger Pulses (10V active for 10ms) crossfaded across lanes
-		float phraseOut = (tripletLane.phrasePulse.process(args.sampleTime) ? 10.f : 0.f) * (1.f - mix)
-						+ (straightLane.phrasePulse.process(args.sampleTime) ? 10.f : 0.f) * mix;
-		float barOut = (tripletLane.barPulse.process(args.sampleTime) ? 10.f : 0.f) * (1.f - mix)
-					 + (straightLane.barPulse.process(args.sampleTime) ? 10.f : 0.f) * mix;
-		float groupOut = (tripletLane.groupPulse.process(args.sampleTime) ? 10.f : 0.f) * (1.f - mix)
-					   + (straightLane.groupPulse.process(args.sampleTime) ? 10.f : 0.f) * mix;
-		float accentOut = (tripletLane.accentPulse.process(args.sampleTime) ? 10.f : 0.f) * (1.f - mix)
-						+ (straightLane.accentPulse.process(args.sampleTime) ? 10.f : 0.f) * mix;
-
-		outputs[PHRASE_START_OUTPUT].setVoltage(phraseOut);
-		outputs[BAR_START_OUTPUT].setVoltage(barOut);
-		outputs[GROUP_START_OUTPUT].setVoltage(groupOut);
-		outputs[ACCENT_OUTPUT].setVoltage(accentOut);
+		// Process Trigger Pulses (10V active for 10ms)
+		outputs[PHRASE_START_OUTPUT].setVoltage(playhead.phrasePulse.process(args.sampleTime) ? 10.f : 0.f);
+		outputs[BAR_START_OUTPUT].setVoltage(playhead.barPulse.process(args.sampleTime) ? 10.f : 0.f);
+		outputs[GROUP_START_OUTPUT].setVoltage(playhead.groupPulse.process(args.sampleTime) ? 10.f : 0.f);
+		outputs[ACCENT_OUTPUT].setVoltage(playhead.accentPulse.process(args.sampleTime) ? 10.f : 0.f);
 	}
 
 	json_t* groupToJson(const RhythmicGroup& g) {
@@ -715,21 +662,23 @@ struct CallAFriendWidget : ModuleWidget {
 
 		addPadKey(Vec(50.8f, 64.0f), 0, "0");
 
-		// 3. Knobs below dial (y = 78 mm; x = 15.0, 32.9, 50.8, 68.7, 86.6 mm)
-		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(15.0f, 78.f)), module, CallAFriend::SYMMETRY_PARAM));
-		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(32.9f, 78.f)), module, CallAFriend::NOTE_DENSITY_PARAM));
-		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(50.8f, 78.f)), module, CallAFriend::GATE_LENGTH_PARAM));
-		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(68.7f, 78.f)), module, CallAFriend::TRIPLET_STRAIGHT_PARAM));
-		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(86.6f, 78.f)), module, CallAFriend::PITCH_ATTEN_PARAM));
+		// 3. Knobs below dial (y = 78 mm; x = 16.0, 39.2, 62.4, 85.6 mm)
+		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(16.0f, 78.f)), module, CallAFriend::SYMMETRY_PARAM));
+		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(39.2f, 78.f)), module, CallAFriend::NOTE_DENSITY_PARAM));
+		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(62.4f, 78.f)), module, CallAFriend::GATE_LENGTH_PARAM));
+		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(85.6f, 78.f)), module, CallAFriend::PITCH_ATTEN_PARAM));
 
-		// 4. 2-Digit 7-Segment Display (x = 8.5 mm, y = 93 mm)
-		SegmentDisplayWidget* disp = createWidget<SegmentDisplayWidget>(mm2px(Vec(8.5f, 93.f)));
+		// 4. 2-Digit 7-Segment Display (x = 8.5 mm, y = 92 mm)
+		SegmentDisplayWidget* disp = createWidget<SegmentDisplayWidget>(mm2px(Vec(8.5f, 92.f)));
 		if (module) {
 			disp->displayStr = &module->displayStr;
 		}
 		addChild(disp);
 
-		// 5. Bottom Right 3x3 I/O Jack Grid (Row x = 49.5, 68.0, 86.5 mm; Row y = 96.0, 107.0, 118.0 mm)
+		// 5. Gate Length CV Input below Display (x = 22.5 mm, y = 118 mm)
+		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(22.5f, 118.f)), module, CallAFriend::GATE_LENGTH_INPUT));
+
+		// 6. Bottom Right 3x3 I/O Jack Grid (Row x = 49.5, 68.0, 86.5 mm; Row y = 96.0, 107.0, 118.0 mm)
 		// Row 1
 		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(49.5f, 96.f)), module, CallAFriend::CLOCK_INPUT));
 		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(68.0f, 96.f)), module, CallAFriend::RESET_INPUT));

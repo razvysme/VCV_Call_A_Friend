@@ -18,16 +18,81 @@ struct RhythmicGroup {
 	std::vector<float> stepVelocities;
 };
 
+struct WhiteBlueLEDButton : ParamWidget {
+	int lightId = -1;
+	WhiteBlueLEDButton() {
+		box.size = mm2px(Vec(11.6f, 11.6f));
+	}
+	void onButton(const ButtonEvent& e) override {
+		if (e.action == GLFW_PRESS && e.button == GLFW_MOUSE_BUTTON_LEFT) {
+			if (getParamQuantity()) getParamQuantity()->setValue(getParamQuantity()->getMaxValue());
+			e.consume(this);
+		} else if (e.action == GLFW_RELEASE && e.button == GLFW_MOUSE_BUTTON_LEFT) {
+			if (getParamQuantity()) getParamQuantity()->setValue(getParamQuantity()->getMinValue());
+			e.consume(this);
+		}
+	}
+	void draw(const DrawArgs& args) override {
+		float radius = box.size.x / 2.0f;
+		
+		// Button body
+		nvgBeginPath(args.vg);
+		nvgCircle(args.vg, radius, radius, radius);
+		nvgFillColor(args.vg, nvgRGB(240, 240, 240));
+		nvgFill(args.vg);
+		
+		// Border
+		nvgStrokeWidth(args.vg, 1.0f);
+		nvgStrokeColor(args.vg, nvgRGB(200, 200, 200));
+		nvgStroke(args.vg);
+
+		// LED
+		if (module && lightId >= 0) {
+			float brightness = module->lights[lightId].getBrightness();
+			if (brightness > 0.0f) {
+				nvgBeginPath(args.vg);
+				nvgCircle(args.vg, radius, radius, radius * 0.6f);
+				NVGcolor color = nvgRGB(0, 100, 255); // Blue
+				color.a = brightness;
+				nvgFillColor(args.vg, color);
+				nvgFill(args.vg);
+
+				// Glow
+				NVGpaint paint = nvgRadialGradient(args.vg, radius, radius, radius*0.2f, radius, nvgRGBA(0, 100, 255, 100 * brightness), nvgRGBA(0, 100, 255, 0));
+				nvgBeginPath(args.vg);
+				nvgCircle(args.vg, radius, radius, radius);
+				nvgFillPaint(args.vg, paint);
+				nvgFill(args.vg);
+			}
+		}
+
+		// When pressed, make it slightly darker
+		if (getParamQuantity() && getParamQuantity()->getValue() > 0.5f) {
+			nvgBeginPath(args.vg);
+			nvgCircle(args.vg, radius, radius, radius);
+			nvgFillColor(args.vg, nvgRGBA(0, 0, 0, 30));
+			nvgFill(args.vg);
+		}
+	}
+};
+
 struct CallAFriend : Module {
 	enum ParamId {
+		// Knobs
 		SYMMETRY_PARAM,
 		NOTE_DENSITY_PARAM,
 		GATE_LENGTH_PARAM,
 		PITCH_ATTEN_PARAM,
+		SLEW_PARAM,
+		
+		// Top Buttons
 		CLEAR_PARAM,
-		RECALL_PARAM,
 		SAVE_PARAM,
+		RECALL_PARAM,
+		LINK_PARAM,
 		REST_PARAM,
+		
+		// Telephone Pad Buttons (0-9)
 		DIGIT_0_PARAM,
 		DIGIT_1_PARAM,
 		DIGIT_2_PARAM,
@@ -43,6 +108,8 @@ struct CallAFriend : Module {
 	enum InputId {
 		CLOCK_INPUT,
 		RESET_INPUT,
+		SYMMETRY_INPUT,
+		DENSITY_INPUT,
 		GATE_LENGTH_INPUT,
 		INPUTS_LEN
 	};
@@ -57,6 +124,11 @@ struct CallAFriend : Module {
 		OUTPUTS_LEN
 	};
 	enum LightId {
+		CLEAR_LIGHT,
+		SAVE_LIGHT,
+		RECALL_LIGHT,
+		LINK_LIGHT,
+		REST_LIGHT,
 		LIGHTS_LEN
 	};
 
@@ -67,6 +139,9 @@ struct CallAFriend : Module {
 	struct PlayheadState {
 		int currentGroupIdx = 0;
 		int currentStepInGroup = 0;
+		bool stepJustFired = false;
+		float currentSlewCV = 0.f;
+
 		int totalStepCounter = 0;
 		int barClockCounter = 0;
 		float gateTimeRemaining = 0.f;
@@ -83,6 +158,8 @@ struct CallAFriend : Module {
 		void reset() {
 			currentGroupIdx = 0;
 			currentStepInGroup = 0;
+			stepJustFired = false;
+			currentSlewCV = 0.f;
 			totalStepCounter = 0;
 			barClockCounter = 0;
 			gateTimeRemaining = 0.f;
@@ -91,26 +168,44 @@ struct CallAFriend : Module {
 			isAccent = false;
 			isNoteActive = false;
 		}
-	};
-
-	PlayheadState playhead;
+	} playhead;
 
 	// Mode State
 	enum InputMode {
 		MODE_NORMAL,
 		MODE_RECALL,
 		MODE_SAVE,
-		MODE_REST
+		MODE_REST,
+		MODE_LINK_EDIT
 	} mode = MODE_NORMAL;
 
+	// Tuning Variables
+	float buttonBlinkRateMs = 500.f;        // Regular mode blink period
+	float buttonConfirmBlinkRateMs = 150.f; // Confirm effect blink period (2 blinks)
+	float displayOffTimeMs = 150.f;         // Display off time when a number is entered
+
+	std::vector<int> patternChain;
+	bool linkModeActive = false;
+	int currentChainIdx = -1;
+	
+	// Confirm effect timers
+	float saveConfirmTimer = 0.f;
+	float recallConfirmTimer = 0.f;
+	float linkConfirmTimer = 0.f;
+	float restConfirmTimer = 0.f;
+
+	// Display state
 	std::string displayStr = "00";
+	std::string actualDisplayStr = "00";
+	float displayOffTimer = 0.f;
 
 	// Clock Input Schmitt Triggers & Button Triggers
 	dsp::SchmittTrigger clockTrigger;
 	dsp::SchmittTrigger resetTrigger;
 	dsp::SchmittTrigger clearTrigger;
-	dsp::SchmittTrigger recallTrigger;
 	dsp::SchmittTrigger saveTrigger;
+	dsp::SchmittTrigger recallTrigger;
+	dsp::SchmittTrigger linkTrigger;
 	dsp::SchmittTrigger restTrigger;
 	dsp::SchmittTrigger digitTriggers[10];
 
@@ -130,15 +225,16 @@ struct CallAFriend : Module {
 
 	CallAFriend() {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
-		configParam(SYMMETRY_PARAM, 0.f, 100.f, 50.f, "Symmetry", "%");
-		configParam(NOTE_DENSITY_PARAM, 0.f, 100.f, 100.f, "Note Density", "%");
-		configParam(GATE_LENGTH_PARAM, 5.f, 95.f, 50.f, "Global Gate Length", "%");
-		configParam(PITCH_ATTEN_PARAM, 0.f, 1.f, 1.f, "Pitch Attenuator", "%", 0.f, 100.f);
-
-		configParam(CLEAR_PARAM, 0.f, 1.f, 0.f, "Clear");
-		configParam(RECALL_PARAM, 0.f, 1.f, 0.f, "Recall");
-		configParam(SAVE_PARAM, 0.f, 1.f, 0.f, "Save");
-		configParam(REST_PARAM, 0.f, 1.f, 0.f, "Rest");
+		configParam(CallAFriend::CLEAR_PARAM, 0.f, 1.f, 0.f, "Clear");
+		configParam(CallAFriend::SAVE_PARAM, 0.f, 1.f, 0.f, "Save");
+		configParam(CallAFriend::RECALL_PARAM, 0.f, 1.f, 0.f, "Recall");
+		configParam(CallAFriend::LINK_PARAM, 0.f, 1.f, 0.f, "Link");
+		configParam(CallAFriend::REST_PARAM, 0.f, 1.f, 0.f, "Rest");
+		configParam(CallAFriend::SYMMETRY_PARAM, 0.f, 100.f, 50.f, "Symmetry", "%");
+		configParam(CallAFriend::NOTE_DENSITY_PARAM, 0.f, 100.f, 100.f, "Note Density", "%");
+		configParam(CallAFriend::GATE_LENGTH_PARAM, 10.f, 90.f, 50.f, "Gate Length", "%");
+		configParam(CallAFriend::PITCH_ATTEN_PARAM, 0.f, 1.f, 1.f, "Pitch Attenuation");
+		configParam(CallAFriend::SLEW_PARAM, 0.f, 1.f, 0.f, "Slew");
 
 		for (int dig = 0; dig <= 9; dig++) {
 			configParam(DIGIT_0_PARAM + dig, 0.f, 1.f, 0.f, "Digit " + std::to_string(dig));
@@ -146,6 +242,8 @@ struct CallAFriend : Module {
 
 		configInput(CLOCK_INPUT, "Clock");
 		configInput(RESET_INPUT, "Reset");
+		configInput(SYMMETRY_INPUT, "Symmetry CV");
+		configInput(DENSITY_INPUT, "Density CV");
 		configInput(GATE_LENGTH_INPUT, "Gate Length CV");
 
 		configOutput(PHRASE_START_OUTPUT, "Phrase Start");
@@ -220,34 +318,44 @@ struct CallAFriend : Module {
 
 	void updateDisplay() {
 		if (mode == MODE_RECALL) {
-			displayStr = "r-";
+			actualDisplayStr = "r-";
 		} else if (mode == MODE_SAVE) {
-			displayStr = "S-";
+			actualDisplayStr = "S-";
 		} else if (mode == MODE_REST) {
-			displayStr = "--";
+			actualDisplayStr = "--";
+		} else if (mode == MODE_LINK_EDIT) {
+			actualDisplayStr = "L-";
 		} else {
 			int total = getTotalSteps();
 			char buf[8];
 			snprintf(buf, sizeof(buf), "%02d", total % 100);
-			displayStr = buf;
+			actualDisplayStr = buf;
+		}
+		if (displayOffTimer <= 0.f) {
+			displayStr = actualDisplayStr;
 		}
 	}
 
 	void onDialDigit(int digit) {
 		int dialed = (digit == 0) ? 10 : digit;
+		
+		displayOffTimer = displayOffTimeMs / 1000.f; // Blink the display
 
 		if (mode == MODE_RECALL) {
 			int slot = (digit == 10) ? 0 : digit;
 			if (slot >= 0 && slot < 10 && !saveSlots[slot].empty()) {
 				groups = saveSlots[slot];
+				linkModeActive = false; // Override link mode
 			}
 			mode = MODE_NORMAL;
+			recallConfirmTimer = 2.0f * (buttonConfirmBlinkRateMs / 1000.f);
 		} else if (mode == MODE_SAVE) {
 			int slot = (digit == 10) ? 0 : digit;
 			if (slot >= 0 && slot < 10) {
 				saveSlots[slot] = groups;
 			}
 			mode = MODE_NORMAL;
+			saveConfirmTimer = 2.0f * (buttonConfirmBlinkRateMs / 1000.f);
 		} else if (mode == MODE_REST) {
 			RhythmicGroup g;
 			g.length = dialed;
@@ -256,12 +364,34 @@ struct CallAFriend : Module {
 			generateGroupPattern(g);
 			groups.push_back(g);
 			mode = MODE_NORMAL;
+			restConfirmTimer = 2.0f * (buttonConfirmBlinkRateMs / 1000.f);
+		} else if (mode == MODE_LINK_EDIT) {
+			int slot = (digit == 10) ? 0 : digit;
+			patternChain.push_back(slot);
+			char buf[8];
+			snprintf(buf, sizeof(buf), "%d-", slot);
+			actualDisplayStr = buf;
+			if (displayOffTimer <= 0.f) displayStr = actualDisplayStr;
+			return; // Don't fall through to updateDisplay()
 		} else {
 			RhythmicGroup g;
 			g.length = dialed;
 			g.isRest = false;
 			g.symmetry = params[SYMMETRY_PARAM].getValue();
-			generateGroupPattern(g);
+			
+			bool copied = false;
+			for (const auto& existing : groups) {
+				if (!existing.isRest && existing.length == dialed) {
+					g.stepCVs = existing.stepCVs;
+					g.stepAccents = existing.stepAccents;
+					g.stepVelocities = existing.stepVelocities;
+					copied = true;
+					break;
+				}
+			}
+			if (!copied) {
+				generateGroupPattern(g);
+			}
 			groups.push_back(g);
 		}
 
@@ -302,7 +432,17 @@ struct CallAFriend : Module {
 		playhead.currentStepInGroup++;
 		if (playhead.currentStepInGroup >= groups[playhead.currentGroupIdx].length) {
 			playhead.currentStepInGroup = 0;
-			playhead.currentGroupIdx = (playhead.currentGroupIdx + 1) % groups.size();
+			playhead.currentGroupIdx++;
+			if (playhead.currentGroupIdx >= (int)groups.size()) {
+				playhead.currentGroupIdx = 0;
+				if (linkModeActive && !patternChain.empty()) {
+					currentChainIdx = (currentChainIdx + 1) % (int)patternChain.size();
+					int slot = patternChain[currentChainIdx];
+					if (!saveSlots[slot].empty()) {
+						groups = saveSlots[slot];
+					}
+				}
+			}
 		}
 
 		playhead.totalStepCounter++;
@@ -327,6 +467,11 @@ struct CallAFriend : Module {
 		playhead.isAccent = false;
 		RhythmicGroup& curGroup = groups[playhead.currentGroupIdx];
 		float sym = params[SYMMETRY_PARAM].getValue();
+		if (inputs[SYMMETRY_INPUT].isConnected()) {
+			sym += inputs[SYMMETRY_INPUT].getVoltage() * 10.0f;
+		}
+		sym = clamp(sym, 0.f, 100.f);
+
 		int randVal = std::rand() % 100;
 		if (randVal < (int)sym) {
 			playhead.isAccent = getTemplateAccents(curGroup.length, playhead.currentStepInGroup);
@@ -343,6 +488,13 @@ struct CallAFriend : Module {
 				if (newCV < 0.f) newCV += 1.0f;
 				if (newCV > 2.0f) newCV -= 1.0f;
 				curGroup.stepCVs[playhead.currentStepInGroup] = newCV;
+
+				// Sync drift to all other groups of the same length (non-rests)
+				for (auto& otherGroup : groups) {
+					if (!otherGroup.isRest && otherGroup.length == curGroup.length) {
+						otherGroup.stepCVs[playhead.currentStepInGroup] = newCV;
+					}
+				}
 			}
 		}
 
@@ -352,6 +504,11 @@ struct CallAFriend : Module {
 		if (!curGroup.isRest && playhead.currentStepInGroup < (int)curGroup.stepVelocities.size()) {
 			stepVel = curGroup.stepVelocities[playhead.currentStepInGroup];
 			float density = params[NOTE_DENSITY_PARAM].getValue();
+			if (inputs[DENSITY_INPUT].isConnected()) {
+				density += inputs[DENSITY_INPUT].getVoltage() * 10.0f;
+			}
+			density = clamp(density, 0.f, 100.f);
+
 			if (density > 0.f) {
 				if (density >= 100.f) {
 					playhead.isNoteActive = true;
@@ -391,27 +548,53 @@ struct CallAFriend : Module {
 	void process(const ProcessArgs& args) override {
 		timesincesync++;
 
+		// Update display off timer
+		if (displayOffTimer > 0.f) {
+			displayOffTimer -= args.sampleTime;
+			displayStr = "  "; // Use spaces so the SegmentDisplayWidget renders it completely dark
+		} else {
+			displayStr = actualDisplayStr;
+		}
+
 		// Button Handlers
 		if (clearTrigger.process(params[CLEAR_PARAM].getValue())) {
 			if (mode != MODE_NORMAL) {
-				// Acts as universal Escape/Cancel when display is flashing command prompts (SAVE, RECALL, REST)
+				// Acts as universal Escape/Cancel when display is flashing command prompts
 				mode = MODE_NORMAL;
 				updateDisplay();
 			} else {
 				// Instantly flushes array, zeros variables, resets display to 00
 				groups.clear();
 				playhead.reset();
+				linkModeActive = false;
 				mode = MODE_NORMAL;
 				updateDisplay();
 			}
+		}
+		if (saveTrigger.process(params[SAVE_PARAM].getValue())) {
+			mode = (mode == MODE_SAVE) ? MODE_NORMAL : MODE_SAVE;
+			updateDisplay();
 		}
 		if (recallTrigger.process(params[RECALL_PARAM].getValue())) {
 			mode = (mode == MODE_RECALL) ? MODE_NORMAL : MODE_RECALL;
 			updateDisplay();
 		}
-		if (saveTrigger.process(params[SAVE_PARAM].getValue())) {
-			mode = (mode == MODE_SAVE) ? MODE_NORMAL : MODE_SAVE;
-			updateDisplay();
+		if (linkTrigger.process(params[LINK_PARAM].getValue())) {
+			if (mode == MODE_LINK_EDIT) {
+				mode = MODE_NORMAL;
+				if (!patternChain.empty()) {
+					linkModeActive = true;
+					currentChainIdx = -1; // Starts on the next phrase wrap-around
+					linkConfirmTimer = 2.0f * (buttonConfirmBlinkRateMs / 1000.f);
+				}
+				updateDisplay();
+			} else {
+				mode = MODE_LINK_EDIT;
+				linkModeActive = false;
+				patternChain.clear();
+				displayStr = "L-";
+				actualDisplayStr = "L-";
+			}
 		}
 		if (restTrigger.process(params[REST_PARAM].getValue())) {
 			mode = (mode == MODE_REST) ? MODE_NORMAL : MODE_REST;
@@ -423,9 +606,64 @@ struct CallAFriend : Module {
 			}
 		}
 
+		// Light Blinking Logic
+		float blinkPeriod = buttonBlinkRateMs / 1000.f;
+		static float blinkPhase = 0.f;
+		blinkPhase += args.sampleTime / blinkPeriod;
+		if (blinkPhase >= 1.0f) blinkPhase -= 1.0f;
+		bool blinkState = blinkPhase < 0.5f;
+
+		float confirmPeriod = buttonConfirmBlinkRateMs / 1000.f;
+
+		// LINK Light
+		if (linkConfirmTimer > 0.f) {
+			linkConfirmTimer -= args.sampleTime;
+			float fastPhase = std::fmod(linkConfirmTimer / confirmPeriod, 1.0f);
+			lights[LINK_LIGHT].setBrightness((fastPhase > 0.5f) ? 1.f : 0.f);
+		} else {
+			lights[LINK_LIGHT].setBrightness((mode == MODE_LINK_EDIT) ? (blinkState ? 1.f : 0.f) : 0.f);
+		}
+
+		// REST Light
+		if (restConfirmTimer > 0.f) {
+			restConfirmTimer -= args.sampleTime;
+			float fastPhase = std::fmod(restConfirmTimer / confirmPeriod, 1.0f);
+			lights[REST_LIGHT].setBrightness((fastPhase > 0.5f) ? 1.f : 0.f);
+		} else {
+			lights[REST_LIGHT].setBrightness((mode == MODE_REST) ? (blinkState ? 1.f : 0.f) : 0.f);
+		}
+
+		// RECALL Light
+		if (recallConfirmTimer > 0.f) {
+			recallConfirmTimer -= args.sampleTime;
+			float fastPhase = std::fmod(recallConfirmTimer / confirmPeriod, 1.0f);
+			lights[RECALL_LIGHT].setBrightness((fastPhase > 0.5f) ? 1.f : 0.f);
+		} else {
+			lights[RECALL_LIGHT].setBrightness((mode == MODE_RECALL) ? (blinkState ? 1.f : 0.f) : 0.f);
+		}
+
+		// CLEAR Light
+		lights[CLEAR_LIGHT].setBrightness(params[CLEAR_PARAM].getValue() > 0.5f ? 1.f : 0.f);
+
+		// SAVE Light
+		if (saveConfirmTimer > 0.f) {
+			saveConfirmTimer -= args.sampleTime;
+			float fastPhase = std::fmod(saveConfirmTimer / confirmPeriod, 1.0f);
+			lights[SAVE_LIGHT].setBrightness((fastPhase > 0.5f) ? 1.f : 0.f);
+		} else {
+			lights[SAVE_LIGHT].setBrightness((mode == MODE_SAVE) ? (blinkState ? 1.f : 0.f) : 0.f);
+		}
+
 		// Check Reset Input
 		if (resetTrigger.process(inputs[RESET_INPUT].getVoltage())) {
 			playhead.reset();
+			if (linkModeActive && !patternChain.empty()) {
+				currentChainIdx = 0;
+				int slot = patternChain[0];
+				if (!saveSlots[slot].empty()) {
+					groups = saveSlots[slot];
+				}
+			}
 			playhead.phrasePulse.trigger(0.010f);
 			playhead.groupPulse.trigger(0.010f);
 		}
@@ -636,11 +874,17 @@ struct CallAFriendWidget : ModuleWidget {
 		addChild(createWidget<ScrewSilver>(Vec(RACK_GRID_WIDTH, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));
 		addChild(createWidget<ScrewSilver>(Vec(box.size.x - 2 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));
 
-		// 1. Top Buttons (x = 18, 38, 58, 78 mm; y = 16 mm)
-		addParam(createParamCentered<VCVButton>(mm2px(Vec(18.f, 16.f)), module, CallAFriend::CLEAR_PARAM));
-		addParam(createParamCentered<VCVButton>(mm2px(Vec(38.f, 16.f)), module, CallAFriend::RECALL_PARAM));
-		addParam(createParamCentered<VCVButton>(mm2px(Vec(58.f, 16.f)), module, CallAFriend::SAVE_PARAM));
-		addParam(createParamCentered<VCVButton>(mm2px(Vec(78.f, 16.f)), module, CallAFriend::REST_PARAM));
+		// 1. Top Buttons (x = 12.0, 31.4, 50.8, 70.2, 89.6 mm; y = 16 mm)
+		auto addButton = [&](Vec centerMm, int paramId, int lightId) {
+			WhiteBlueLEDButton* btn = createParamCentered<WhiteBlueLEDButton>(mm2px(centerMm), module, paramId);
+			btn->lightId = lightId;
+			addParam(btn);
+		};
+		addButton(Vec(12.0f, 16.f), CallAFriend::CLEAR_PARAM, CallAFriend::CLEAR_LIGHT);
+		addButton(Vec(31.4f, 16.f), CallAFriend::SAVE_PARAM, CallAFriend::SAVE_LIGHT);
+		addButton(Vec(50.8f, 16.f), CallAFriend::RECALL_PARAM, CallAFriend::RECALL_LIGHT);
+		addButton(Vec(70.2f, 16.f), CallAFriend::LINK_PARAM, CallAFriend::LINK_LIGHT);
+		addButton(Vec(89.6f, 16.f), CallAFriend::REST_PARAM, CallAFriend::REST_LIGHT);
 
 		// 2. Old Telephone Keypad Buttons (Row 1: 1,2,3; Row 2: 4,5,6; Row 3: 7,8,9; Row 4: 0 at bottom center)
 		auto addPadKey = [&](Vec centerMm, int digId, const std::string& lbl) {
@@ -662,37 +906,38 @@ struct CallAFriendWidget : ModuleWidget {
 
 		addPadKey(Vec(50.8f, 64.0f), 0, "0");
 
-		// 3. Knobs below dial (y = 78 mm; x = 16.0, 39.2, 62.4, 85.6 mm)
-		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(16.0f, 78.f)), module, CallAFriend::SYMMETRY_PARAM));
-		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(39.2f, 78.f)), module, CallAFriend::NOTE_DENSITY_PARAM));
-		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(62.4f, 78.f)), module, CallAFriend::GATE_LENGTH_PARAM));
-		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(85.6f, 78.f)), module, CallAFriend::PITCH_ATTEN_PARAM));
+		// 3. Knobs below dial (y = 78 mm; x = 12.0, 31.4, 50.8, 70.2, 89.6 mm)
+		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(12.0f, 78.f)), module, CallAFriend::SYMMETRY_PARAM));
+		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(31.4f, 78.f)), module, CallAFriend::NOTE_DENSITY_PARAM));
+		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(50.8f, 78.f)), module, CallAFriend::GATE_LENGTH_PARAM));
+		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(70.2f, 78.f)), module, CallAFriend::PITCH_ATTEN_PARAM));
+		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(89.6f, 78.f)), module, CallAFriend::SLEW_PARAM));
 
-		// 4. 2-Digit 7-Segment Display (x = 8.5 mm, y = 92 mm)
-		SegmentDisplayWidget* disp = createWidget<SegmentDisplayWidget>(mm2px(Vec(8.5f, 92.f)));
+		// 4. 2-Digit 7-Segment Display (x = 2.5 mm, y = 92 mm)
+		SegmentDisplayWidget* disp = createWidget<SegmentDisplayWidget>(mm2px(Vec(2.5f, 92.f)));
 		if (module) {
 			disp->displayStr = &module->displayStr;
 		}
 		addChild(disp);
 
-		// 5. Gate Length CV Input below Display (x = 22.5 mm, y = 118 mm)
-		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(22.5f, 118.f)), module, CallAFriend::GATE_LENGTH_INPUT));
-
-		// 6. Bottom Right 3x3 I/O Jack Grid (Row x = 49.5, 68.0, 86.5 mm; Row y = 96.0, 107.0, 118.0 mm)
+		// 6. Bottom Right 4x3 I/O Jack Grid (Row x = 45.0, 59.0, 73.0, 87.0 mm; Row y = 96.0, 107.0, 118.0 mm)
 		// Row 1
-		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(49.5f, 96.f)), module, CallAFriend::CLOCK_INPUT));
-		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(68.0f, 96.f)), module, CallAFriend::RESET_INPUT));
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(86.5f, 96.f)), module, CallAFriend::PHRASE_START_OUTPUT));
+		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(45.0f, 96.f)), module, CallAFriend::CLOCK_INPUT));
+		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(59.0f, 96.f)), module, CallAFriend::RESET_INPUT));
+		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(73.0f, 96.f)), module, CallAFriend::SYMMETRY_INPUT));
+		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(87.0f, 96.f)), module, CallAFriend::DENSITY_INPUT));
 
 		// Row 2
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(49.5f, 107.f)), module, CallAFriend::BAR_START_OUTPUT));
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(68.0f, 107.f)), module, CallAFriend::GROUP_START_OUTPUT));
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(86.5f, 107.f)), module, CallAFriend::ACCENT_OUTPUT));
+		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(45.0f, 107.f)), module, CallAFriend::GATE_LENGTH_INPUT));
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(59.0f, 107.f)), module, CallAFriend::PHRASE_START_OUTPUT));
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(73.0f, 107.f)), module, CallAFriend::BAR_START_OUTPUT));
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(87.0f, 107.f)), module, CallAFriend::GROUP_START_OUTPUT));
 
 		// Row 3
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(49.5f, 118.f)), module, CallAFriend::GATE_OUTPUT));
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(68.0f, 118.f)), module, CallAFriend::UNIPOLAR_CV_OUTPUT));
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(86.5f, 118.f)), module, CallAFriend::BIPOLAR_CV_OUTPUT));
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(45.0f, 118.f)), module, CallAFriend::GATE_OUTPUT));
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(59.0f, 118.f)), module, CallAFriend::ACCENT_OUTPUT));
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(73.0f, 118.f)), module, CallAFriend::UNIPOLAR_CV_OUTPUT));
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(87.0f, 118.f)), module, CallAFriend::BIPOLAR_CV_OUTPUT));
 	}
 };
 

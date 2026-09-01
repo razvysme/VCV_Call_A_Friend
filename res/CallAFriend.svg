@@ -26,44 +26,46 @@
   <!-- Top Button Section Line & Labels -->
   <line x1="8" y1="23.5" x2="93.6" y2="23.5" stroke="#2e3440" stroke-width="0.3" />
 
-  <!-- Button Labels (Buttons at x=18, 38, 58, 78; y=18.5) -->
-  <text x="18" y="22.5" font-family="sans-serif" font-size="1.8" font-weight="bold" fill="#a8b5c2" text-anchor="middle">CLEAR</text>
-  <text x="38" y="22.5" font-family="sans-serif" font-size="1.8" font-weight="bold" fill="#a8b5c2" text-anchor="middle">RECALL</text>
-  <text x="58" y="22.5" font-family="sans-serif" font-size="1.8" font-weight="bold" fill="#a8b5c2" text-anchor="middle">SAVE</text>
-  <text x="78" y="22.5" font-family="sans-serif" font-size="1.8" font-weight="bold" fill="#a8b5c2" text-anchor="middle">REST</text>
+  <!-- Button Labels (Buttons at x=12.0, 31.4, 50.8, 70.2, 89.6; y=16.0) -->
+  <text x="12.0" y="22.5" font-family="sans-serif" font-size="1.8" font-weight="bold" fill="#a8b5c2" text-anchor="middle">CLEAR</text>
+  <text x="31.4" y="22.5" font-family="sans-serif" font-size="1.8" font-weight="bold" fill="#a8b5c2" text-anchor="middle">SAVE</text>
+  <text x="50.8" y="22.5" font-family="sans-serif" font-size="1.8" font-weight="bold" fill="#a8b5c2" text-anchor="middle">RECALL</text>
+  <text x="70.2" y="22.5" font-family="sans-serif" font-size="1.8" font-weight="bold" fill="#a8b5c2" text-anchor="middle">LINK</text>
+  <text x="89.6" y="22.5" font-family="sans-serif" font-size="1.8" font-weight="bold" fill="#a8b5c2" text-anchor="middle">REST</text>
 
   <!-- Middle Section Keypad Bezel Frame (centered at 50.8, y: 25.0 to 70.0) -->
   <rect x="29.5" y="25.0" width="42.6" height="45.0" rx="2.5" fill="#13161b" stroke="#2e3440" stroke-width="0.5" />
 
-  <!-- Below Keypad Section Line & Knob Labels (Knobs at y=78.0; x=16.0, 39.2, 62.4, 85.6) -->
+  <!-- Below Keypad Section Line & Knob Labels (Knobs at y=78.0; x=12.0, 31.4, 50.8, 70.2, 89.6) -->
   <line x1="8" y1="71.5" x2="93.6" y2="71.5" stroke="#2e3440" stroke-width="0.3" />
-  <text x="16.0" y="85.5" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#a8b5c2" text-anchor="middle">SYMMETRY</text>
-  <text x="39.2" y="85.5" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#a8b5c2" text-anchor="middle">DENSITY</text>
-  <text x="62.4" y="85.5" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#a8b5c2" text-anchor="middle">GATE LEN</text>
-  <text x="85.6" y="85.5" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#a8b5c2" text-anchor="middle">ATTEN</text>
+  <text x="12.0" y="85.5" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#a8b5c2" text-anchor="middle">SYMMETRY</text>
+  <text x="31.4" y="85.5" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#a8b5c2" text-anchor="middle">DENSITY</text>
+  <text x="50.8" y="85.5" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#a8b5c2" text-anchor="middle">GATE LEN</text>
+  <text x="70.2" y="85.5" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#a8b5c2" text-anchor="middle">ATTEN</text>
+  <text x="89.6" y="85.5" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#a8b5c2" text-anchor="middle">SLEW</text>
 
-  <!-- Bottom Left Section: 7-Segment Display Bezel & CV Jack -->
-  <text x="22.5" y="90.8" font-family="sans-serif" font-size="1.3" font-weight="bold" fill="#6d7a88" text-anchor="middle">STATUS</text>
-  <rect x="8.5" y="92.0" width="28.0" height="15.5" rx="1.5" fill="#0c0e12" stroke="#2e3440" stroke-width="0.5" />
+  <!-- Bottom Left Section: 7-Segment Display Bezel (shifted left to x=3.0 for space) -->
+  <text x="16.5" y="90.8" font-family="sans-serif" font-size="1.3" font-weight="bold" fill="#6d7a88" text-anchor="middle">STATUS</text>
+  <rect x="2.5" y="92.0" width="28.0" height="15.5" rx="1.5" fill="#0c0e12" stroke="#2e3440" stroke-width="0.5" />
 
-  <rect x="8.5" y="109.0" width="28.0" height="14.5" rx="1.5" fill="#14171d" stroke="#2e3440" stroke-width="0.5" />
-  <text x="22.5" y="114.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#00d2ff" text-anchor="middle">LEN CV</text>
+  <!-- Bottom Right Section: 4x3 Jack Grid Bezel & Labels -->
+  <rect x="34.0" y="89.5" width="64.0" height="34.0" rx="1.5" fill="#14171d" stroke="#2e3440" stroke-width="0.5" />
 
-  <!-- Bottom Right Section: 3x3 Jack Grid Bezel & Labels -->
-  <rect x="42.5" y="89.5" width="51.0" height="34.0" rx="1.5" fill="#14171d" stroke="#2e3440" stroke-width="0.5" />
+  <!-- Row 1 Labels (y=92.4 port centered at y=96.0) -->
+  <text x="45.0" y="92.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#00d2ff" text-anchor="middle">CLK IN</text>
+  <text x="59.0" y="92.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#00d2ff" text-anchor="middle">RST IN</text>
+  <text x="73.0" y="92.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#00d2ff" text-anchor="middle">SYM CV</text>
+  <text x="87.0" y="92.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#00d2ff" text-anchor="middle">DENS CV</text>
 
-  <!-- Row 1 Labels (y=92.5 port centered at y=95.5) -->
-  <text x="49.5" y="92.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#00d2ff" text-anchor="middle">CLK IN</text>
-  <text x="68.0" y="92.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#00d2ff" text-anchor="middle">RST IN</text>
-  <text x="86.5" y="92.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#ffb300" text-anchor="middle">PHRASE</text>
+  <!-- Row 2 Labels (y=103.4 port centered at y=107.0) -->
+  <text x="45.0" y="103.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#00d2ff" text-anchor="middle">LEN CV</text>
+  <text x="59.0" y="103.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#ffb300" text-anchor="middle">PHRASE</text>
+  <text x="73.0" y="103.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#ffb300" text-anchor="middle">BAR</text>
+  <text x="87.0" y="103.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#ffb300" text-anchor="middle">GROUP</text>
 
-  <!-- Row 2 Labels (port centered at y=106.5) -->
-  <text x="49.5" y="103.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#ffb300" text-anchor="middle">BAR</text>
-  <text x="68.0" y="103.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#ffb300" text-anchor="middle">GROUP</text>
-  <text x="86.5" y="103.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#ffb300" text-anchor="middle">ACCENT</text>
-
-  <!-- Row 3 Labels (port centered at y=117.5) -->
-  <text x="49.5" y="114.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#00e5ff" text-anchor="middle">GATE</text>
-  <text x="68.0" y="114.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#4caf50" text-anchor="middle">UNI CV</text>
-  <text x="86.5" y="114.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#e91e63" text-anchor="middle">BIP CV</text>
+  <!-- Row 3 Labels (y=114.4 port centered at y=118.0) -->
+  <text x="45.0" y="114.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#00e5ff" text-anchor="middle">GATE</text>
+  <text x="59.0" y="114.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#ffb300" text-anchor="middle">ACCENT</text>
+  <text x="73.0" y="114.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#4caf50" text-anchor="middle">UNI CV</text>
+  <text x="87.0" y="114.4" font-family="sans-serif" font-size="1.4" font-weight="bold" fill="#e91e63" text-anchor="middle">BIP CV</text>
 </svg>
